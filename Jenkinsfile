@@ -2,46 +2,49 @@ pipeline {
     agent any
 
     environment {
-        AWS_REGION = "ap-south-1"
-        ECR_URL = "930710566461.dkr.ecr.ap-south-1.amazonaws.com/ci-cd-app"
+        AWS_REGION = 'us-east-1'          // Change to your region
+        ECR_REPO = 'your-ecr-repo-name'   // Change to your ECR repo
+        IMAGE_TAG = "latest"
     }
 
     stages {
+
         stage('Checkout Code') {
             steps {
-                git branch: 'main', url: 'https://github.com/Tinkut22/CI-CD-app.git'
+                git branch: 'main',
+                    url: 'https://github.com/Tinkut22/CI-CD-app.git',
+                    credentialsId: 'github-creds'
             }
         }
 
         stage('Build Java Application') {
             steps {
-                sh '''
-                mvn clean package
-                '''
+                dir('sampleapp') {  // Change 'sampleapp' if your code is somewhere else
+                    sh 'mvn clean package'
+                }
             }
         }
 
         stage('Build Docker Image') {
             steps {
-                sh '''
-                docker build -t ci-cd-app:${BUILD_NUMBER} .
-                '''
+                sh 'docker build -t $ECR_REPO:$IMAGE_TAG .'
             }
         }
 
         stage('Login to AWS ECR') {
             steps {
                 sh '''
-                aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_URL
+                    aws ecr get-login-password --region $AWS_REGION | \
+                    docker login --username AWS --password-stdin <aws_account_id>.dkr.ecr.$AWS_REGION.amazonaws.com
                 '''
             }
         }
 
-        stage('Tag & Push Image') {
+        stage('Tag & Push Docker Image') {
             steps {
                 sh '''
-                docker tag ci-cd-app:${BUILD_NUMBER} $ECR_URL:${BUILD_NUMBER}
-                docker push $ECR_URL:${BUILD_NUMBER}
+                    docker tag $ECR_REPO:$IMAGE_TAG <aws_account_id>.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO:$IMAGE_TAG
+                    docker push <aws_account_id>.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO:$IMAGE_TAG
                 '''
             }
         }
@@ -49,10 +52,10 @@ pipeline {
 
     post {
         success {
-            echo "SUCCESS! Docker image pushed to ECR: $ECR_URL:${BUILD_NUMBER}"
+            echo 'Build and push completed successfully!'
         }
         failure {
-            echo "BUILD FAILED — Check console output."
+            echo 'Build failed — check logs.'
         }
     }
 }
